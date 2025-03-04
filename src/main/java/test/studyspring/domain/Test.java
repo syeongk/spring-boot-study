@@ -1,4 +1,4 @@
-package test.studyspring.transaction;
+package test.studyspring.domain;
 
 
 import jakarta.persistence.Entity;
