@@ -74,7 +74,7 @@ jobs:
     # Step 2: EC2 서버로 JAR 파일 전송
     - name: Deploy to EC2
       run: |
-        scp -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} build/libs/*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu
+        scp -i ${{ secrets.EC2_SSH_KEY }} build/libs/*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu
         # scp 명령어를 사용하여 JAR 파일을 EC2 서버의 /home/ubuntu 경로로 전송
         # -i ${{ secrets.EC2_SSH_KEY }} : GitHub Secrets에서 가져온 SSH Private Key 사용
         # ubuntu@${{ secrets.EC2_HOST }} : GitHub Secrets에서 가져온 EC2 인스턴스의 IP 주소
@@ -83,7 +83,7 @@ jobs:
     - name: Restart Application on EC2
       run: |
           # GitHub Actions에서 EC2 서버에 SSH로 접속
-          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
+          ssh -i ${{ secrets.EC2_SSH_KEY }} ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
           # 실행 중인 Java 프로세스를 종료 (실패해도 무시)
           pkill -f 'java -jar' || true
           # 안정적인 종료를 위해 3초 대기
