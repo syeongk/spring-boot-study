@@ -72,11 +72,16 @@ jobs:
         path: build/libs  # 다운로드할 위치 지정
 
     # Step 2: EC2 서버로 JAR 파일 전송
+    - name: Set up SSH key
+      # ${{ secrets.EC2_SSH_KEY }} : GitHub Secrets에서 가져온 SSH Private Key 사용
+      run: |
+        echo "${{ secrets.EC2_SSH_KEY }}" > test-key.pem
+        chmod 600 test-key.pem
+      
     - name: Deploy to EC2
       run: |
-        scp -i ${{ secrets.EC2_SSH_KEY }} build/libs/*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu
+        scp -i test-key.pem build/libs/*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu
         # scp 명령어를 사용하여 JAR 파일을 EC2 서버의 /home/ubuntu 경로로 전송
-        # -i ${{ secrets.EC2_SSH_KEY }} : GitHub Secrets에서 가져온 SSH Private Key 사용
         # ubuntu@${{ secrets.EC2_HOST }} : GitHub Secrets에서 가져온 EC2 인스턴스의 IP 주소
 
     # Step 3: EC2에서 기존 애플리케이션 중지 후 새 JAR 실행
