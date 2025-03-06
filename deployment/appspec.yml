@@ -1,0 +1,14 @@
+version: 0.0
+os: linux
+files:
+  - source: __JAR_FILE_NAME__
+    destination: /home/ubuntu/app
+hooks:
+  ApplicationStop:
+    - location: scripts/stop.sh
+      timeout: 300
+      runas: ubuntu
+  ApplicationStart:
+    - location: scripts/start.sh
+      timeout: 300
+      runas: ubuntu

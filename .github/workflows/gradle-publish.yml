@@ -49,53 +49,52 @@ jobs:
       # 기존 빌드 파일 정리(clean), 빌드 수행, 테스트는 제외 (-x test)
       run: ./gradlew clean build -x test
 
-    # Step 6: 빌드된 JAR 파일을 업로드
-    - name: Upload Artifact
+    # Step 6: 빌드된 JAR 파일과 deployment 폴더를 하나의 패키지로 묶기
+    - name: Package JAR and Deployment Files into ZIP
+      run: |
+        mkdir -p package
+        cp build/libs/*.jar package/
+        cp -R deployment/* package/
+        cd package
+        zip -r ../deployment-package.zip ./*
+
+    # Step 7: ZIP 파일을 아티팩트로 업로드
+    - name: Upload Deployment Package
       uses: actions/upload-artifact@v4
       with:
-        name: spring-boot-study.jar  # 업로드할 파일의 이름
-        path: build/libs/*.jar  # JAR 파일이 있는 경로 지정
-        
-  # 두 번째 Job: EC2 서버로 배포하는 단계
-  deploy:
-    # "deploy" Job은 "build" Job이 완료된 후 실행됨
+        name: deployment-package
+        path: deployment-package.zip
+
+  # 두 번째 Job: zip 파일 S3 로 업로드하는 단계
+  s3-upload:
+    # "s3-upload" Job은 "build" Job이 완료된 후 실행됨
     needs: build
     # 실행 환경으로 최신 Ubuntu 사용
     runs-on: ubuntu-latest
 
     steps:
-    # Step 1: 이전 Job에서 빌드한 JAR 파일 다운로드
-    - name: Download Artifact
-      uses: actions/download-artifact@v4
-      with:
-        name: spring-boot-study.jar  # 다운로드할 파일의 이름 (업로드된 이름과 동일해야 함)
-        path: build/libs  # 다운로드할 위치 지정
+      # Step 1: build Job에서 업로드한 아티팩트 다운로드
+      - name: Download Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: deployment-package
 
-    # Step 2: EC2 서버로 JAR 파일 전송
-    - name: Set up SSH key
-      # ${{ secrets.EC2_SSH_KEY }} : GitHub Secrets에서 가져온 SSH Private Key 사용
-      run: |
-        echo "${{ secrets.EC2_SSH_KEY }}" > test-key.pem
-        chmod 600 test-key.pem
-      
-    - name: Deploy to EC2
-      run: |
-        scp -i test-key.pem build/libs/*.jar ubuntu@${{ secrets.EC2_HOST }}:/home/ubuntu
-        # scp 명령어를 사용하여 JAR 파일을 EC2 서버의 /home/ubuntu 경로로 전송
-        # ubuntu@${{ secrets.EC2_HOST }} : GitHub Secrets에서 가져온 EC2 인스턴스의 IP 주소
+      # Step 2: AWS CLI를 사용하기 위한 AWS 자격 증명 설정
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_KEY }}
+          aws-region: ap-northeast-2
 
-    # Step 3: EC2에서 기존 애플리케이션 중지 후 새 JAR 실행
-    - name: Restart Application on EC2
-      run: |
-          # GitHub Actions에서 EC2 서버에 SSH로 접속
-          ssh -i ${{ secrets.EC2_SSH_KEY }} ubuntu@${{ secrets.EC2_HOST }} << 'EOF'
-          # 실행 중인 Java 프로세스를 종료 (실패해도 무시)
-          pkill -f 'java -jar' || true
-          # 안정적인 종료를 위해 3초 대기
-          sleep 3
+      # Step 3: S3로 ZIP 파일 업로드
+      - name: Upload JAR to S3
+        run: aws s3 cp package/deployment-package.zip s3://${{ secrets.S3_BUCKET_NAME }}/deploy/deployment-package.zip
 
-          # nohup: SSH 종료 후에도 애플리케이션이 실행되도록 함
-          # java -jar /home/ubuntu/spring-boot-study.jar: 새로운 JAR 파일 실행
-          # > /home/ubuntu/app.log 2>&1 &: 실행 로그를 app.log에 저장하며 백그라운드에서 실행
-          nohup java -jar /home/ubuntu/spring-boot-study.jar > /home/ubuntu/app.log 2>&1 &  
-          EOF
+      # Step 4: CodeDeploy를 이용해 S3에 있는 JAR 파일을 EC2에 배포
+      - name: Deploy to EC2 using CodeDeploy
+        run: |
+          aws deploy create-deployment \
+            --application-name ${{ secrets.CODEDEPLOY_APP_NAME }} \
+            --deployment-group-name ${{ secrets.CODEDEPLOY_GROUP_NAME }} \
+            --s3-location bucket=${{ secrets.S3_BUCKET_NAME }},key=deploy/deployment-package.zip,bundleType=zip
