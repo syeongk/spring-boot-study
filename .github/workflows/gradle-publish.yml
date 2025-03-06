@@ -89,7 +89,7 @@ jobs:
 
       # Step 3: S3로 ZIP 파일 업로드
       - name: Upload ZIP to S3
-        run: aws s3 cp deployment-package s3://${{ secrets.S3_BUCKET_NAME }}/deploy/deployment-package
+        run: aws s3 cp deployment-package.zip s3://${{ secrets.S3_BUCKET_NAME }}/deploy/deployment-package.zip
 
       # Step 4: CodeDeploy를 이용해 S3에 있는 JAR 파일을 EC2에 배포
       - name: Deploy to EC2 using CodeDeploy
